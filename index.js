@@ -1,4 +1,3 @@
-import fetch from 'node-fetch';
 import fs from 'fs';
 import prompts from 'prompts';
 
@@ -233,6 +232,96 @@ let promptFetch = async function (limit) {
     })
 }
 
+let promptEstimate = async function () {
+    let leaderboardJSON;
+    try {
+        leaderboardJSON = await fs.readFileSync('./leaderboard.json');
+    } catch (error) {
+        console.log(error);
+        return;
+    }
+    
+    let parsedJSON = JSON.parse(leaderboardJSON);
+    let totalLocked = parsedJSON.map(user => user.amount).reduce((a, b) => a + b, 0);
+
+    let response;
+    try {
+        response = await prompts(
+            [
+                {
+                    type: 'number',
+                    name: 'value',
+                    message: `Enter a quantity of ${chain === "BTS" ? "BTS" : "TEST"} to generate estimates`,
+                    validate: value => value < 0 || value > (2994550000 - totalLocked)  ? `Invalid quantity: ${value < 0 ? 'Too low' : 'Too high'}` : true
+                },
+                {
+                    type: 'select',
+                    name: 'lock_type',
+                    message: 'What type of ticket are you creating?',
+                    choices: [
+                        {
+                            title: 'Liquid funds 💰',
+                            value: 'liquid'
+                        },
+                        {
+                            title: 'Lock for 180 days 🙂',
+                            value: 'lock_180_days'
+                        },
+                        {
+                            title: 'Lock for 360 days 😯',
+                            value: 'lock_360_days'
+                        },
+                        {
+                            title: 'Lock for 720 days 😲',
+                            value: 'lock_720_days'
+                        },
+                        {
+                            title: 'Lock forever 🫡',
+                            value: 'lock_forever'
+                        }
+                    ]
+                },
+            ],
+            { onCancel }
+        );
+    } catch (error) {
+        console.log(error);
+    }
+    
+    if (!response || !response.value || !response.lock_type) {
+        console.log('Quit estimate calculator')
+        return;
+    }
+
+    let calculatedValue;
+    if (response.lock_type === "lock_180_days") {
+        calculatedValue = response.value * 2;
+    } else if (response.lock_type === "lock_360_days") {
+        calculatedValue = response.value * 4;
+    } else if (response.lock_type === "lock_720_days") {
+        calculatedValue = response.value * 8;
+    } else if (response.lock_type === "lock_forever") {
+        calculatedValue = response.value * 8;
+    } else {
+        calculatedValue = 0;
+    }
+
+    console.log(
+        `Total locked: ${totalLocked} ${chain === "BTS" ? "BTS" : "TEST"} \n` +
+        `Your input amount: ${response.value} \n` +
+        `Your final calculated amount: ${calculatedValue} \n` +
+        `% influence gain: ${(calculatedValue / totalLocked)*100} \n` +
+        `Impact on top 5 leaderboard: \n` +
+        `1. ${parsedJSON[0].percent.toFixed(5)}% -> ${((parsedJSON[0].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
+        `2. ${parsedJSON[1].percent.toFixed(5)}% -> ${((parsedJSON[1].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
+        `3. ${parsedJSON[2].percent.toFixed(5)}% -> ${((parsedJSON[2].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
+        `4. ${parsedJSON[3].percent.toFixed(5)}% -> ${((parsedJSON[3].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
+        `5. ${parsedJSON[4].percent.toFixed(5)}% -> ${((parsedJSON[4].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n`
+    )
+
+    process.exit();
+}
+
 let promptAirdrop = async function () {
     let response;
     try {
@@ -243,10 +332,6 @@ let promptAirdrop = async function () {
                     name: 'menu',
                     message: 'What do you want to do?',
                     choices: [
-                        {
-                            title: 'Compute totals from tickets',
-                            value: 'compute'
-                        },
                         {
                             title: 'Airdrop BTS proportionally to ticket holders',
                             value: 'proportional'
@@ -269,9 +354,7 @@ let promptAirdrop = async function () {
         return;
     }
 
-    if (response.menu === 'compute') {
-        console.log('compute')
-    } else if (response.menu === 'proportional') {
+    if (response.menu === 'proportional') {
         console.log('proportional')
     } else if (response.menu === 'random') {
         console.log('random')
@@ -290,6 +373,11 @@ let promptMenu = async function () {
         menuOptions.push({
             title: 'Create airdrop',
             value: 'airdrop'
+        });
+
+        menuOptions.push({
+            title: 'Estimate ticket lock creation impact',
+            value: 'estimate'
         });
     }
 
@@ -319,6 +407,8 @@ let promptMenu = async function () {
         promptFetch(1000);
     } else if (response.menu === 'airdrop') {
         promptAirdrop();
+    } else if (response.menu === 'estimate') {
+        promptEstimate();
     }
 }
 
