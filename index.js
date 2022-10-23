@@ -4,7 +4,8 @@ import prompts from 'prompts';
 import {
     fetchObjects,
     getAccountNames,
-    testNodes
+    testNodes,
+    getBlockWitSig
 } from './src/lib/queries.js';
 
 let ticketStore = [];
@@ -13,7 +14,33 @@ let selectedNode = "";
 
 let chain;
 let finished;
-let endID;
+
+/**
+ * Splitting arrays into chunks
+ * @param {Array} arr 
+ * @param {Number} chunkSize 
+ * @returns {Array}
+ */
+function chunk(arr, chunkSize) {
+    if (chunkSize <= 0) {
+        throw "Invalid chunk size"
+    }
+    var R = [];
+    for (var i=0,len=arr.length; i<len; i+=chunkSize) {
+        R.push(arr.slice(i,i+chunkSize));
+    }
+
+    return R;
+}
+
+/**
+ * For identifying non-numeric chars in witness signature
+ * @param {String} c 
+ * @returns {Boolean}
+ */
+function isCharNumber(c) {
+    return c >= '0' && c <= '9';
+}
 
 const onCancel = prompt => {
     console.log('rejected prompt')
@@ -31,6 +58,38 @@ let nodeFailureCallback = async function () {
     let nodesToChange = testedNodes;
     nodesToChange.push(nodesToChange.shift()); // Moving misbehaving node to end
     testedNodes = nodesToChange;
+}
+
+
+async function pickNode () {
+    let response;
+    try {
+        response = await prompts(
+            [
+                {
+                    type: 'select',
+                    name: 'wss',
+                    message: 'Which blockchain connection do you want to use? (sorted fastest to slowest)',
+                    choices: testedNodes.map((node, i) => {
+                        return {
+                            title: node,
+                            value: node
+                        }
+                    })
+                },
+            ],
+            { onCancel }
+        );
+    } catch (error) {
+        console.log(error);
+    }
+    
+    if (!response || !response.wss) {
+        console.log('User quit the wss menu')
+        process.exit();
+    }
+
+    selectedNode = response.wss
 }
 
 function humanReadableFloat(satoshis, precision) {
@@ -107,33 +166,9 @@ let promptFetch = async function (limit) {
         }
     }
 
-    let response;
-    try {
-        response = await prompts(
-            [
-                {
-                    type: 'select',
-                    name: 'wss',
-                    message: 'Which blockchain connection do you want to use? (sorted fastest to slowest)',
-                    choices: testedNodes.map((node, i) => {
-                        return {
-                            title: node,
-                            value: node
-                        }
-                    })
-                },
-            ],
-            { onCancel }
-        );
-    } catch (error) {
-        console.log(error);
+    if (!selectedNode) {
+        await pickNode();
     }
-    
-    if (!response || !response.wss) {
-        console.log('User quit the wss menu')
-        return;
-    }
-    selectedNode = response.wss
 
     let lastID = ticketStore && ticketStore.length
                     ? parseInt((ticketStore.at(-1).id).split("1.18.")[1])
@@ -201,6 +236,7 @@ let promptFetch = async function (limit) {
     }
 
     let leaderboard = [];
+    let from = 0;
     for (var key of Object.keys(tallies)) {
         let currentValue = parseFloat(humanReadableFloat(parseInt(tallies[key]), 5).toFixed(5));
 
@@ -218,10 +254,23 @@ let promptFetch = async function (limit) {
         })
     }
 
+    let sortedLeaderboard = leaderboard.sort(function(a, b){return b.amount - a.amount});
+
+    let finalLeaderboard = [];
+    for (let i=0; i < sortedLeaderboard.length; i++) {
+        let current = sortedLeaderboard[i];
+        current.range = {
+            from: parseInt(from),
+            to: parseInt(from + current.amount)
+        }
+        finalLeaderboard.push(current)
+        from += current.amount + 1;
+    }
+
     fs.writeFile(
         './leaderboard.json',
         JSON.stringify(
-            leaderboard.sort(function(a, b){return b.amount - a.amount}),
+            finalLeaderboard,
             undefined,
             4
         ),
@@ -290,7 +339,7 @@ let promptEstimate = async function () {
     
     if (!response || !response.value || !response.lock_type) {
         console.log('Quit estimate calculator')
-        return;
+        process.exit();
     }
 
     let calculatedValue;
@@ -307,10 +356,10 @@ let promptEstimate = async function () {
     }
 
     console.log(
-        `Total locked: ${totalLocked} ${chain === "BTS" ? "BTS" : "TEST"} \n` +
+        `Total locked: ${totalLocked.toFixed(5)} ${chain === "BTS" ? "BTS" : "TEST"} \n` +
         `Your input amount: ${response.value} \n` +
         `Your final calculated amount: ${calculatedValue} \n` +
-        `% influence gain: ${(calculatedValue / totalLocked)*100} \n` +
+        `% influence gain: ${((calculatedValue / totalLocked)*100).toFixed(5)} \n` +
         `Impact on top 5 leaderboard: \n` +
         `1. ${parsedJSON[0].percent.toFixed(5)}% -> ${((parsedJSON[0].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
         `2. ${parsedJSON[1].percent.toFixed(5)}% -> ${((parsedJSON[1].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
@@ -322,6 +371,11 @@ let promptEstimate = async function () {
     process.exit();
 }
 
+let proportionalDistribution = async function () {
+    // Note: Set a min req for participation to avoid dust
+    console.log('TODO: proportional distribution');
+}
+
 let promptAirdrop = async function () {
     let response;
     try {
@@ -330,14 +384,14 @@ let promptAirdrop = async function () {
                 {
                     type: 'select',
                     name: 'menu',
-                    message: 'What do you want to do?',
+                    message: 'What kind of airdrop do you want to perform?',
                     choices: [
                         {
                             title: 'Airdrop BTS proportionally to ticket holders',
                             value: 'proportional'
                         },
                         {
-                            title: 'Randomly airdrop BTS onto a ticket holder',
+                            title: 'Randomly airdrop BTS onto ticket holders',
                             value: 'random'
                         }
                     ]
@@ -351,14 +405,146 @@ let promptAirdrop = async function () {
     
     if (!response || !response.menu) {
         console.log('User quit the main menu')
-        return;
+        process.exit();
     }
 
     if (response.menu === 'proportional') {
-        console.log('proportional')
+        proportionalDistribution();
     } else if (response.menu === 'random') {
-        console.log('random')
+        randomDistributionPrompt();
     }
+}
+
+let randomDistributionPrompt = async function () {
+    let response;
+    try {
+        response = await prompts(
+            [
+                {
+                    type: 'multiselect',
+                    name: 'distributions',
+                    message: 'Select your prefered method(s) for generating provably random airdrop distributions',
+                    choices: [
+                        { title: 'Forward chunks', value: 'forward' },
+                        { title: 'Reverse chunks', value: 'reverse' },
+                        { title: 'PI', value: 'pi' }
+                    ],
+                },
+                {
+                    type: 'number',
+                    name: 'block_number',
+                    message: `Enter the block number you wish to use for airdrop purposes.`
+                }
+            ],
+            { onCancel }
+        );
+    } catch (error) {
+        console.log(error);
+    }
+    
+    if (!response || !response.distributions || !response.distributions.length || !response.block_number) {
+        console.log('User quit the random airdrop menu');
+        process.exit();
+    }
+
+    if (!testedNodes || !testedNodes.length) {
+        let tested = await testNodes(chain);
+
+        if (tested && tested.length) {
+            testedNodes = tested;
+        }
+    }
+
+    if (!selectedNode) {
+        await pickNode();
+    }
+
+    let witness_signature;
+    try {
+        witness_signature = await getBlockWitSig(selectedNode, response.block_number, nodeFailureCallback);
+    } catch (error) {
+        console.log(error);
+        process.exit();
+    }
+
+    let filtered_signature = witness_signature.split('').map((char) => {
+        if (isCharNumber(char)) {
+            return char;
+        } else {
+            return char.charCodeAt(0).toString();
+        }
+    }).join('')
+    
+    let initialChunks = chunk(
+        (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+        8
+    ).map(x => parseInt(x));
+
+    let generatedNumbers = [];
+    if (response.distributions.includes('forward')) {
+        generatedNumbers = [...generatedNumbers, ...initialChunks];
+    }
+    
+    if (response.distributions.includes('reverse')) {
+        let reversedChunks = initialChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
+        generatedNumbers = [...generatedNumbers, ...reversedChunks];
+    }
+    
+    if (response.distributions.includes('pi')) {
+        let piChunks = [];
+        for (let i = 0; i < initialChunks.length; i++) {
+            let current = parseInt(Math.sqrt(initialChunks[i]));
+            
+            for (let y = i; y < initialChunks.length - i; y++) {
+                let nextValue = parseInt(Math.sqrt(initialChunks[y]));
+                piChunks.push(
+                    parseInt((current * nextValue) * Math.PI)
+                )
+            }
+        }
+
+        generatedNumbers = [...generatedNumbers, ...piChunks];
+    }
+    
+    // TODO: Calculate winners
+    let leaderboardJSON;
+    try {
+        leaderboardJSON = await fs.readFileSync('./leaderboard.json');
+    } catch (error) {
+        console.log(error);
+        return;
+    }
+
+    let parsedJSON = JSON.parse(leaderboardJSON);
+    let lastTicketVal = parsedJSON.at(-1).range.to;
+    
+    // 
+    let fixedGeneratedNumbers = generatedNumbers.map(num => {
+        if (num <= lastTicketVal) {
+            return num;
+        }
+
+        let adjustedNum = num - (Math.floor(num / lastTicketVal) * lastTicketVal);
+
+        return adjustedNum;
+    })
+
+
+    let winners = {};
+    for (let i = 0; i < fixedGeneratedNumbers.length; i++) {
+        let currentNumber = fixedGeneratedNumbers[i];
+        let search = parsedJSON.find(x => currentNumber >= x.range.from && currentNumber <= x.range.to);
+
+        if (search) {
+            winners[search.id] = winners.hasOwnProperty(search.id)
+                ? [...winners[search.id], currentNumber]
+                : [currentNumber]
+        }
+    }
+
+    console.log({winners});
+
+    process.exit();
 }
 
 let promptMenu = async function () {
@@ -400,7 +586,7 @@ let promptMenu = async function () {
     
     if (!response || !response.menu) {
         console.log('User quit the main menu')
-        return;
+        process.exit();
     }
 
     if (response.menu === 'fetch') {
@@ -441,7 +627,7 @@ let promptENV = async function () {
     
     if (!response || !response.chain) {
         console.log('User quit the env menu')
-        return;
+        process.exit();
     }
 
     chain = response.chain;

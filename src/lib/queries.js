@@ -177,8 +177,42 @@ async function getAccountNames(accountIds, node, nodeFailureCallback) {
     });
 }
 
+/**
+ * Get the witness signature from the block
+ * @param {String} node 
+ * @param {Number} blockNumber
+ * @returns 
+ */
+ async function getBlockWitSig(node, blockNumber, nodeFailureCallback) {
+    return new Promise(async (resolve, reject) => {
+
+        try {
+            await Apis.instance(node, true).init_promise;
+        } catch (error) {
+            console.log(error);
+            nodeFailureCallback()
+            return reject();
+        }
+
+        let object;
+        try {
+            object = await Apis.instance().db_api().exec("get_block", [blockNumber])
+        } catch (error) {
+            console.log(error);
+            return reject();
+        }
+
+        if (!object) {
+            return reject();
+        }
+
+        return resolve(object.witness_signature);
+    });
+}
+
 export {
     getAccountNames,
     fetchObjects,
-    testNodes
+    testNodes,
+    getBlockWitSig
 };
