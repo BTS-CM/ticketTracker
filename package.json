@@ -1,0 +1,30 @@
+{
+  "name": "tickettracker",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fetching and tallying Bitshares tickets",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BTS-CM/ticketTracker.git"
+  },
+  "keywords": [
+    "bitshares"
+  ],
+  "author": "R",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/BTS-CM/ticketTracker/issues"
+  },
+  "homepage": "https://github.com/BTS-CM/ticketTracker#readme",
+  "dependencies": {
+    "bitsharesjs-ws": "^6.0.0",
+    "node-fetch": "^3.2.10",
+    "prompts": "^2.4.2",
+    "simple-websocket": "^9.1.0"
+  }
+}
