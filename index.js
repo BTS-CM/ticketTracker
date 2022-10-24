@@ -427,7 +427,10 @@ let randomDistributionPrompt = async function () {
                     choices: [
                         { title: 'Forward chunks', value: 'forward' },
                         { title: 'Reverse chunks', value: 'reverse' },
-                        { title: 'PI', value: 'pi' }
+                        { title: 'PI', value: 'pi' },
+                        { title: 'Reverse PI', value: 'reverse_pi' },
+                        { title: 'Cubed', value: 'cubed' },
+                        { title: 'Hyper-Cubed', value: 'hypercube'}
                     ],
                 },
                 {
@@ -469,28 +472,56 @@ let randomDistributionPrompt = async function () {
 
     let filtered_signature = witness_signature.split('').map((char) => {
         if (isCharNumber(char)) {
-            return char;
+            return char; // fine
         } else {
-            return char.charCodeAt(0).toString();
+            return char.charCodeAt(0).toString(); // swap letters for numbers
         }
     }).join('')
     
+    console.log(filtered_signature.length)
+
     let initialChunks = chunk(
+        // 0 - 999,999,
+        // 24 chunks
         (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-        8
+        9
     ).map(x => parseInt(x));
 
     let generatedNumbers = [];
     if (response.distributions.includes('forward')) {
+        // 0 - 999,999,999
+        // 24 draws
         generatedNumbers = [...generatedNumbers, ...initialChunks];
     }
-    
+
     if (response.distributions.includes('reverse')) {
+        // 0 - 999,999,999
+        // 24 draws
         let reversedChunks = initialChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
         generatedNumbers = [...generatedNumbers, ...reversedChunks];
     }
-    
+
+    if (response.distributions.includes('reverse_pi')) {
+        // 24 draws
+        let piChunks = [];
+        let reversedChunks = initialChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
+
+        for (let i = 0; i < reversedChunks.length; i++) {
+            let current = parseInt(Math.sqrt(reversedChunks[i]));
+            
+            for (let y = i; y < reversedChunks.length - i; y++) {
+                let nextValue = parseInt(Math.sqrt(reversedChunks[y]));
+                piChunks.push(
+                    parseInt((current * nextValue) * Math.PI)
+                )
+            }
+        }
+
+        generatedNumbers = [...generatedNumbers, ...piChunks];
+    }
+
     if (response.distributions.includes('pi')) {
+        // 24 draws
         let piChunks = [];
         for (let i = 0; i < initialChunks.length; i++) {
             let current = parseInt(Math.sqrt(initialChunks[i]));
@@ -505,8 +536,39 @@ let randomDistributionPrompt = async function () {
 
         generatedNumbers = [...generatedNumbers, ...piChunks];
     }
+
+    if (response.distributions.includes('cubed')) {
+        // 0 - 997,002,999
+        // 72 draws
+        let smallerChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            3
+        ).map(x => parseInt(x));
+
+        let cubedChunks = smallerChunks.map(x => parseInt(x * x * x));
+        generatedNumbers = [...generatedNumbers, ...cubedChunks];
+    }
+
+    if (response.distributions.includes('hypercube')) {
+        /**
+         * 0 - 2,991,008,997 (just below the total of 2.994 Billion BTS)
+         * 86 draws
+         */
+        let smallerChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            5
+        ).map(x => parseInt(x));
+
+        let reversedChunks = smallerChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
+        
+        let hyperCubeChunks = [...reversedChunks, ...smallerChunks].map(x => {
+            let val = Math.sqrt(x) * Math.PI;
+            return parseInt(3 * (val * val * val))
+        });
+
+        generatedNumbers = [...generatedNumbers, ...hyperCubeChunks];
+    }
     
-    // TODO: Calculate winners
     let leaderboardJSON;
     try {
         leaderboardJSON = await fs.readFileSync('./leaderboard.json');
@@ -518,7 +580,6 @@ let randomDistributionPrompt = async function () {
     let parsedJSON = JSON.parse(leaderboardJSON);
     let lastTicketVal = parsedJSON.at(-1).range.to;
     
-    // 
     let fixedGeneratedNumbers = generatedNumbers.map(num => {
         if (num <= lastTicketVal) {
             return num;
@@ -528,7 +589,6 @@ let randomDistributionPrompt = async function () {
 
         return adjustedNum;
     })
-
 
     let winners = {};
     for (let i = 0; i < fixedGeneratedNumbers.length; i++) {
@@ -543,6 +603,8 @@ let randomDistributionPrompt = async function () {
     }
 
     console.log({winners});
+
+
 
     process.exit();
 }
