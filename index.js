@@ -355,17 +355,23 @@ let promptEstimate = async function () {
         calculatedValue = 0;
     }
 
+    const newTotal = totalLocked + calculatedValue;
     console.log(
         `Total locked: ${totalLocked.toFixed(5)} ${chain === "BTS" ? "BTS" : "TEST"} \n` +
         `Your input amount: ${response.value} \n` +
         `Your final calculated amount: ${calculatedValue} \n` +
         `% influence gain: ${((calculatedValue / totalLocked)*100).toFixed(5)} \n` +
-        `Impact on top 5 leaderboard: \n` +
-        `1. ${parsedJSON[0].percent.toFixed(5)}% -> ${((parsedJSON[0].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
-        `2. ${parsedJSON[1].percent.toFixed(5)}% -> ${((parsedJSON[1].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
-        `3. ${parsedJSON[2].percent.toFixed(5)}% -> ${((parsedJSON[2].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
-        `4. ${parsedJSON[3].percent.toFixed(5)}% -> ${((parsedJSON[3].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n` +
-        `5. ${parsedJSON[4].percent.toFixed(5)}% -> ${((parsedJSON[4].amount / (totalLocked + calculatedValue)) * 100).toFixed(5)}% \n`
+        `Impact on top 10 leaderboard: \n` +
+        `1. ${parsedJSON[0].percent.toFixed(5)}% -> ${((parsedJSON[0].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `2. ${parsedJSON[1].percent.toFixed(5)}% -> ${((parsedJSON[1].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `3. ${parsedJSON[2].percent.toFixed(5)}% -> ${((parsedJSON[2].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `4. ${parsedJSON[3].percent.toFixed(5)}% -> ${((parsedJSON[3].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `5. ${parsedJSON[4].percent.toFixed(5)}% -> ${((parsedJSON[4].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `6. ${parsedJSON[5].percent.toFixed(5)}% -> ${((parsedJSON[5].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `7. ${parsedJSON[6].percent.toFixed(5)}% -> ${((parsedJSON[6].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `8. ${parsedJSON[7].percent.toFixed(5)}% -> ${((parsedJSON[7].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `9. ${parsedJSON[8].percent.toFixed(5)}% -> ${((parsedJSON[8].amount / newTotal) * 100).toFixed(5)}% \n` +
+        `10. ${parsedJSON[9].percent.toFixed(5)}% -> ${((parsedJSON[9].amount / newTotal) * 100).toFixed(5)}% \n`
     )
 
     process.exit();
