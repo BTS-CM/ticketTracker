@@ -1,13 +1,7 @@
 import Socket from "simple-websocket";
 import {Apis} from "bitsharesjs-ws";
-
-import config from '../config/config.json' assert { type: "json" };;
-
-const _nodes = {
-    BTS: config.BTS.nodeList.map(node => node.url),
-    BTS_TEST: config.BTS_TEST.nodeList.map(node => node.url)
-};
-
+import fs from "fs";
+import path from "path";
 
 /**
  * Call an async function with a maximum time limit (in milliseconds) for the timeout
@@ -89,6 +83,22 @@ const _nodes = {
  */
 async function testNodes(target, itr = 0) {
     return new Promise(async (resolve, reject) => {
+
+        let currentPath = path.resolve();
+
+        let config;
+        try {
+            config = await fs.readFileSync(currentPath + "/src/config/config.json");
+        } catch (error) {
+            console.log(error);
+            return;
+        }
+
+        const _nodes = {
+            BTS: JSON.parse(config).BTS.nodeList.map(node => node.url),
+            BTS_TEST: JSON.parse(config).BTS_TEST.nodeList.map(node => node.url)
+        };
+
         let urlPromises = _nodes[target].map(url => asyncCallWithTimeout(_testConnection(url), itr > 0 ? itr * 3000 : 3000))
         return Promise.all(urlPromises)
         .then((validNodes) => {

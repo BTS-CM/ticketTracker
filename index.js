@@ -379,51 +379,7 @@ let promptEstimate = async function () {
     process.exit();
 }
 
-let proportionalDistribution = async function () {
-    // Note: Set a min req for participation to avoid dust
-    console.log('TODO: proportional distribution');
-}
-
 let promptAirdrop = async function () {
-    let response;
-    try {
-        response = await prompts(
-            [
-                {
-                    type: 'select',
-                    name: 'menu',
-                    message: 'What kind of airdrop do you want to perform?',
-                    choices: [
-                        {
-                            title: 'Airdrop BTS proportionally to ticket holders',
-                            value: 'proportional'
-                        },
-                        {
-                            title: 'Randomly airdrop BTS onto ticket holders',
-                            value: 'random'
-                        }
-                    ]
-                },
-            ],
-            { onCancel }
-        );
-    } catch (error) {
-        console.log(error);
-    }
-    
-    if (!response || !response.menu) {
-        console.log('User quit the main menu')
-        process.exit();
-    }
-
-    if (response.menu === 'proportional') {
-        proportionalDistribution();
-    } else if (response.menu === 'random') {
-        randomDistributionPrompt();
-    }
-}
-
-let randomDistributionPrompt = async function () {
     let response;
     try {
         response = await prompts(
@@ -431,7 +387,7 @@ let randomDistributionPrompt = async function () {
                 {
                     type: 'multiselect',
                     name: 'distributions',
-                    message: 'Select your prefered method(s) for generating provably random airdrop distributions',
+                    message: 'Select your prefered method(s) for generating provably fair airdrop distributions',
                     choices: [
                         { title: 'Forward chunks', value: 'forward' },
                         { title: 'Reverse chunks', value: 'reverse' },
@@ -446,6 +402,12 @@ let randomDistributionPrompt = async function () {
                     type: 'number',
                     name: 'block_number',
                     message: `Enter the block number you wish to use for airdrop purposes.`
+                },
+                {
+                    type: 'number',
+                    name: 'reward',
+                    message: `Enter a quantity of ${chain === "BTS" ? "BTS" : "TEST"} to distribute.`,
+                    validate: value => value < 0 || value > (2994550000)  ? `Invalid quantity: ${value < 0 ? 'Too low' : 'Too high'}` : true
                 }
             ],
             { onCancel }
@@ -454,7 +416,7 @@ let randomDistributionPrompt = async function () {
         console.log(error);
     }
     
-    if (!response || !response.distributions || !response.distributions.length || !response.block_number) {
+    if (!response || !response.distributions || !response.distributions.length || !response.block_number || !response.reward) {
         console.log('User quit the random airdrop menu');
         process.exit();
     }
@@ -487,8 +449,6 @@ let randomDistributionPrompt = async function () {
         }
     }).join('')
     
-    console.log(filtered_signature.length)
-
     let initialChunks = chunk(
         // 0 - 999,999,
         // 24 chunks
@@ -497,6 +457,7 @@ let randomDistributionPrompt = async function () {
     ).map(x => parseInt(x));
 
     let generatedNumbers = [];
+
     if (response.distributions.includes('forward')) {
         // 0 - 999,999,999
         // 24 draws
@@ -573,7 +534,7 @@ let randomDistributionPrompt = async function () {
                     {
                         type: 'select',
                         name: 'projectile',
-                        message: 'Is the projectile a neutrino/gamma ray beam, or will the projectile slow to a halt in the barrel?',
+                        message: 'How far should the projectile travel in the barrel of fish?',
                         choices: [
                             {
                                 title: 'The projectile should pass directly from point A to point B unimpeded.',
@@ -591,11 +552,11 @@ let randomDistributionPrompt = async function () {
                         message: 'Will the projectile splinter on impact?',
                         choices: [
                             {
-                                title: 'Yes, it should splinter on impact.',
+                                title: 'Yes, it should splinter once on impact.',
                                 value: 'yes'
                             },
                             {
-                                title: "No, it's a solid projectile.",
+                                title: "No, it's a solid single projectile.",
                                 value: 'no'
                             }
                         ]
@@ -624,13 +585,19 @@ let randomDistributionPrompt = async function () {
 
         let poiVector = new Vector3(pointOfImpact[0], pointOfImpact[1], pointOfImpact[2]);
 
-        let endVectors = response.splinter === 'yes' ? initBarrelChunks.slice(1) : [initBarrelChunks.slice(1)[0]];
+        let endVectors = response.splinter === 'yes'
+                            ? initBarrelChunks.slice(1)
+                            : [initBarrelChunks.slice(1)[0]];
+
+        let minVector = new Vector3(0, 0, 0);
+        let maxVector = new Vector3(999, 999, 999);
+        let maxDistance = minVector.distanceToSquared(maxVector);
+
+        let projectileDepth = response.projectile === 'beam'
+                                ? 999
+                                : 333;
 
         let obliteratedFish = [];
-        let fishPerSplinter = response.projectile === 'beam'
-                                ? 99
-                                : 33;
-
         for (let y = 0; y < endVectors.length; y++) {
             let end = chunk(
                 (endVectors[y]).toLocaleString('fullwide', {useGrouping:false}),
@@ -639,10 +606,12 @@ let randomDistributionPrompt = async function () {
 
             let endPoint = new Vector3(end[0], end[1], end[2]);
             let path = new Line3(poiVector, endPoint);
-            
-            for (let i = 1; i <= fishPerSplinter; i++) {
+
+            let fishInWay = parseInt((path.distanceSq() / maxDistance) * projectileDepth);
+
+            for (let i = 1; i <= fishInWay; i++) {
                 let resultPlaceholder = new Vector3(0, 0, 0);
-                let calculated = path.at(0.01 * i, resultPlaceholder)
+                let calculated = path.at(0.001 * i, resultPlaceholder)
                 let computed = calculated.toArray().filter(x => x > 0);
                 let ticketValue = 0;
                 if (computed.length == 1) {
@@ -716,9 +685,37 @@ let randomDistributionPrompt = async function () {
         }
     }
 
-    console.log({winners});
+    let summary = [];
+    for (const [key, value] of Object.entries(winners)) {
+        let currentPercent = (value.length / fixedGeneratedNumbers.length * 100).toFixed(5);
+        summary.push({
+            id: key,
+            tickets: JSON.stringify(value),
+            qty: value.length,
+            percent: currentPercent,
+            reward: ((currentPercent/100) * response.reward ?? 0).toFixed(5)
+        })
+    }
 
+    let airdropFile = {
+        result: summary,
+        block_number: response.block_number,
+        generation_methods: response.distributions,
+        total_distributed: response.reward ?? 0
+    };
 
+    fs.writeFileSync(
+        './airdrop.json',
+        JSON.stringify(
+            airdropFile,
+            undefined,
+            4
+        ),
+        function(err) {
+            if (err) throw err;
+            console.log("🌦️ Saved summary of airdrop to airdrop.json");
+        }
+    );
 
     process.exit();
 }
