@@ -311,23 +311,23 @@ let promptEstimate = async function () {
                     message: 'What type of ticket are you creating?',
                     choices: [
                         {
-                            title: 'Liquid funds 💰',
+                            title: 'Liquid funds 💰 (0x)',
                             value: 'liquid'
                         },
                         {
-                            title: 'Lock for 180 days 🙂',
+                            title: 'Lock for 180 days 🙂 (2x)',
                             value: 'lock_180_days'
                         },
                         {
-                            title: 'Lock for 360 days 😯',
+                            title: 'Lock for 360 days 😯 (4x)',
                             value: 'lock_360_days'
                         },
                         {
-                            title: 'Lock for 720 days 😲',
+                            title: 'Lock for 720 days 😲 (8x)',
                             value: 'lock_720_days'
                         },
                         {
-                            title: 'Lock forever 🫡',
+                            title: 'Lock forever 🫡 (8x ⚠️)',
                             value: 'lock_forever'
                         }
                     ]
@@ -524,6 +524,7 @@ let promptAirdrop = async function () {
          * Shooting fish in a barrel is totally fair & we can prove it.
          * The bullet hits the barrel and breaks into multiple fragments which each damage fish in their way.
          * 0 to 997,002,999
+         * Could increase to 0 to 9,979,011,999 if we increase the z axis to 4 digits from 3.
          * Many draws
          */
 
