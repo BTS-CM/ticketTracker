@@ -1,5 +1,7 @@
 import fs from 'fs';
 import prompts from 'prompts';
+//import * as THREE from 'three';
+import { Vector3, Line3 } from 'three';
 
 import {
     fetchObjects,
@@ -436,7 +438,8 @@ let randomDistributionPrompt = async function () {
                         { title: 'PI', value: 'pi' },
                         { title: 'Reverse PI', value: 'reverse_pi' },
                         { title: 'Cubed', value: 'cubed' },
-                        { title: 'Hyper-Cubed', value: 'hypercube'}
+                        { title: 'Hyper-Cubed', value: 'hypercube'},
+                        { title: 'Fish in a barrel', value: 'fish'}
                     ],
                 },
                 {
@@ -555,6 +558,111 @@ let randomDistributionPrompt = async function () {
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
     }
 
+    if (response.distributions.includes('fish')) {
+        /**
+         * Shooting fish in a barrel is totally fair & we can prove it.
+         * The bullet hits the barrel and breaks into multiple fragments which each damage fish in their way.
+         * 0 to 997,002,999
+         * Many draws
+         */
+
+         let response;
+         try {
+             response = await prompts(
+                 [
+                    {
+                        type: 'select',
+                        name: 'projectile',
+                        message: 'Is the projectile a neutrino/gamma ray beam, or will the projectile slow to a halt in the barrel?',
+                        choices: [
+                            {
+                                title: 'The projectile should pass directly from point A to point B unimpeded.',
+                                value: 'beam'
+                            },
+                            {
+                                title: 'The projectiles will slow to a halt quickly in the water.',
+                                value: 'slow'
+                            }
+                        ]
+                    },
+                    {
+                        type: 'select',
+                        name: 'splinter',
+                        message: 'Will the projectile splinter on impact?',
+                        choices: [
+                            {
+                                title: 'Yes, it should splinter on impact.',
+                                value: 'yes'
+                            },
+                            {
+                                title: "No, it's a solid projectile.",
+                                value: 'no'
+                            }
+                        ]
+                    },
+                 ],
+                 { onCancel }
+             );
+         } catch (error) {
+             console.log(error);
+         }
+         
+         if (!response || !response.projectile || !response.splinter) {
+             console.log('User did not shoot fish in a barrel')
+             process.exit();
+         }
+
+        let initBarrelChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            9
+        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
+
+        let pointOfImpact = chunk(
+            (initBarrelChunks[0]).toLocaleString('fullwide', {useGrouping:false}),
+            3
+        ).map(x => parseInt(x));
+
+        let poiVector = new Vector3(pointOfImpact[0], pointOfImpact[1], pointOfImpact[2]);
+
+        let endVectors = response.splinter === 'yes' ? initBarrelChunks.slice(1) : [initBarrelChunks.slice(1)[0]];
+
+        let obliteratedFish = [];
+        let fishPerSplinter = response.projectile === 'beam'
+                                ? 99
+                                : 33;
+
+        for (let y = 0; y < endVectors.length; y++) {
+            let end = chunk(
+                (endVectors[y]).toLocaleString('fullwide', {useGrouping:false}),
+                3
+            ).map(x => parseInt(x));
+
+            let endPoint = new Vector3(end[0], end[1], end[2]);
+            let path = new Line3(poiVector, endPoint);
+            
+            for (let i = 1; i <= fishPerSplinter; i++) {
+                let resultPlaceholder = new Vector3(0, 0, 0);
+                let calculated = path.at(0.01 * i, resultPlaceholder)
+                let computed = calculated.toArray().filter(x => x > 0);
+                let ticketValue = 0;
+                if (computed.length == 1) {
+                    ticketValue = computed[0];
+                } else if (computed.length == 2) {
+                    ticketValue = computed[0] * computed[1];
+                } else if (computed.length == 3) {
+                    ticketValue = computed[0] * computed[1] * computed[2];
+                }
+
+                obliteratedFish.push(
+                    parseInt(ticketValue)
+                );
+            }
+        }
+
+        console.log(`1 entry point, ${endVectors.length} shards, ${obliteratedFish.length} fish obliterated 🐟🎣🍴`)
+        generatedNumbers = [...generatedNumbers, ...obliteratedFish];
+    }
+
     if (response.distributions.includes('hypercube')) {
         /**
          * 0 - 2,991,008,997 (just below the total of 2.994 Billion BTS)
@@ -569,7 +677,7 @@ let randomDistributionPrompt = async function () {
         
         let hyperCubeChunks = [...reversedChunks, ...smallerChunks].map(x => {
             let val = Math.sqrt(x) * Math.PI;
-            return parseInt(3 * (val * val * val))
+            return parseInt(3 * (val * val * val));
         });
 
         generatedNumbers = [...generatedNumbers, ...hyperCubeChunks];
