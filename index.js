@@ -397,7 +397,8 @@ let promptAirdrop = async function () {
                         { title: 'Hyper-Cubed', value: 'hypercube'},
                         { title: 'Fish in a barrel', value: 'fish'},
                         { title: 'Bouncing ball', value: 'bouncing_ball'},
-                        { title: 'Alien blood', value: 'alien_blood'}
+                        { title: 'Alien blood', value: 'alien_blood'},
+                        { title: 'Average point lines', value: 'avg_point_lines'}
                     ],
                 },
                 {
@@ -459,6 +460,9 @@ let promptAirdrop = async function () {
     ).map(x => parseInt(x));
 
     let generatedNumbers = [];
+    let minVector = new Vector3(0, 0, 0);
+    let maxVector = new Vector3(999, 999, 999);
+    let maxDistance = minVector.distanceToSquared(maxVector);
 
     if (response.distributions.includes('forward')) {
         // 0 - 999,999,999
@@ -521,6 +525,70 @@ let promptAirdrop = async function () {
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
     }
 
+    if (response.distributions.includes('avg_point_lines')) {
+        // 0 - 997,002,999 (extend via z axis)
+        // Calculate the avg x/y/z coordinates -> draw lines to this from each vector => reward those on line
+        let initChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            9
+        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
+
+        let vectorChunks = initChunks.map(init => {
+            return chunk(
+                (init).toLocaleString('fullwide', {useGrouping:false}),
+                3
+            )
+        })
+
+        let xTally = 0;
+        let yTally = 0;
+        let zTally = 0;
+        for (let i = 0; i < vectorChunks.length; i++) {
+            let current = vectorChunks[i];
+            xTally += parseInt(current[0]);
+            yTally += parseInt(current[1]);
+            zTally += parseInt(current[2]);
+        }
+
+        let avgVector = new Vector3(
+            parseInt(xTally/vectorChunks.length),
+            parseInt(yTally/vectorChunks.length),
+            parseInt(zTally/vectorChunks.length)
+        )
+
+        let avg_lines = vectorChunks.map(vector => {
+            let current = new Vector3(parseInt(vector[0]), parseInt(vector[1]), parseInt(vector[2]));
+            return new Line3(current, avgVector);
+        })
+
+        let chosenTickets = [];
+        for (let i = 0; i < avg_lines.length; i++) {
+            let current = avg_lines[i];
+            let qty = parseInt((current.distanceSq()/maxDistance) * 999);
+
+            for (let i = 1; i <= qty; i++) {
+                let resultPlaceholder = new Vector3(0, 0, 0);
+                let calculated = current.at(0.001 * i, resultPlaceholder)
+                let computed = calculated.toArray().filter(x => x > 0);
+                let ticketValue = 0;
+                if (computed.length == 1) {
+                    ticketValue = computed[0];
+                } else if (computed.length == 2) {
+                    ticketValue = computed[0] * computed[1];
+                } else if (computed.length == 3) {
+                    ticketValue = computed[0] * computed[1] * computed[2];
+                }
+
+                chosenTickets.push(
+                    parseInt(ticketValue)
+                );
+            }
+        }
+
+        console.log(`avg_point_lines: ${chosenTickets.length} tickets chosen`)
+        generatedNumbers = [...generatedNumbers, ...chosenTickets];
+    }
+
     if (response.distributions.includes('alien_blood')) {
         // 0 - 997,002,999 (extend via z axis)
         // Picks alien blood splatter spots; it burns directly down through the hull
@@ -540,12 +608,6 @@ let promptAirdrop = async function () {
 
             let splatterPoint = new Vector3(hullFragments[0], hullFragments[1], 0);
             let coolingZone = new Vector3(hullFragments[0], hullFragments[1], 999);
-            
-            console.log({
-                from: JSON.stringify(splatterPoint.toArray()),
-                to: JSON.stringify(coolingZone.toArray()),
-            })
-
             let corrasion = new Line3(splatterPoint, coolingZone);
 
             for (let i = 1; i <= 999; i++) {
@@ -592,10 +654,6 @@ let promptAirdrop = async function () {
         lastVector[2] = 0;
         let finalVector = new Vector3(lastVector[0], lastVector[1], lastVector[2]);
         vectors.push(finalVector); // ball falls to the ground at the end
-
-        let minVector = new Vector3(0, 0, 0);
-        let maxVector = new Vector3(999, 999, 999);
-        let maxDistance = minVector.distanceToSquared(maxVector);
 
         let pathOfBall = [];
         for (let i = 0; i < vectors.length - 1; i++) {
@@ -707,10 +765,6 @@ let promptAirdrop = async function () {
         let endVectors = response.splinter === 'yes'
                             ? initBarrelChunks.slice(1)
                             : [initBarrelChunks.slice(1)[0]];
-
-        let minVector = new Vector3(0, 0, 0);
-        let maxVector = new Vector3(999, 999, 999);
-        let maxDistance = minVector.distanceToSquared(maxVector);
 
         let projectileDepth = response.projectile === 'beam'
                                 ? 999
