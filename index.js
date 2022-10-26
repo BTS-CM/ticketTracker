@@ -43,7 +43,7 @@ function chunk(arr, chunkSize) {
  * @returns {Array}
  */
 function extractTickets(quantity, targetLine, increment) {
-    let chosentickets = [];
+    let chosenTickets = [];
     for (let i = 1; i <= quantity; i++) {
         let resultPlaceholder = new Vector3(0, 0, 0);
         let calculated = targetLine.at(increment * i, resultPlaceholder)
@@ -61,7 +61,7 @@ function extractTickets(quantity, targetLine, increment) {
             parseInt(ticketValue)
         );
     }
-    return chosentickets;
+    return chosenTickets;
 }
 
 /**
