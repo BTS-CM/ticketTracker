@@ -395,7 +395,9 @@ let promptAirdrop = async function () {
                         { title: 'Reverse PI', value: 'reverse_pi' },
                         { title: 'Cubed', value: 'cubed' },
                         { title: 'Hyper-Cubed', value: 'hypercube'},
-                        { title: 'Fish in a barrel', value: 'fish'}
+                        { title: 'Fish in a barrel', value: 'fish'},
+                        { title: 'Bouncing ball', value: 'bouncing_ball'},
+                        { title: 'Alien blood', value: 'alien_blood'}
                     ],
                 },
                 {
@@ -517,6 +519,122 @@ let promptAirdrop = async function () {
 
         let cubedChunks = smallerChunks.map(x => parseInt(x * x * x));
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
+    }
+
+    if (response.distributions.includes('alien_blood')) {
+        // 0 - 997,002,999 (extend via z axis)
+        // Picks alien blood splatter spots; it burns directly down through the hull
+        let initHullChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            6
+        ).map(x => parseInt(x)).filter(x => x.toString().length === 6);
+
+        let corrasionTickets = [];
+        for (let i = 0; i < initHullChunks.length; i++) {
+            let currentHullChunk = initHullChunks[i];
+
+            let hullFragments = chunk(
+                (currentHullChunk).toLocaleString('fullwide', {useGrouping:false}),
+                3
+            );
+
+            let splatterPoint = new Vector3(hullFragments[0], hullFragments[1], 0);
+            let coolingZone = new Vector3(hullFragments[0], hullFragments[1], 999);
+            
+            console.log({
+                from: JSON.stringify(splatterPoint.toArray()),
+                to: JSON.stringify(coolingZone.toArray()),
+            })
+
+            let corrasion = new Line3(splatterPoint, coolingZone);
+
+            for (let i = 1; i <= 999; i++) {
+                let resultPlaceholder = new Vector3(0, 0, 0);
+                let calculated = corrasion.at(0.001 * i, resultPlaceholder)
+                let computed = calculated.toArray().filter(x => x > 0);
+                let ticketValue = 0;
+                if (computed.length == 1) {
+                    ticketValue = computed[0];
+                } else if (computed.length == 2) {
+                    ticketValue = computed[0] * computed[1];
+                } else if (computed.length == 3) {
+                    ticketValue = computed[0] * computed[1] * computed[2];
+                }
+
+                corrasionTickets.push(
+                    parseInt(ticketValue)
+                );
+            }
+        }
+
+        console.log(`The alien bled on ${initHullChunks.length} hull tiles, resulting in ${corrasionTickets.length} melted tickets.`)
+        generatedNumbers = [...generatedNumbers, ...corrasionTickets];
+    }
+
+    if (response.distributions.includes('bouncing_ball')) {
+        //  0 - 997,002,999 (extend via z axis)
+        //  path of ball bouncing in matrix -> pick tickets along path
+        let initBarrelChunks = chunk(
+            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
+            9
+        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
+
+        let vectors = initBarrelChunks.map(nineDigits => {
+            let vectorChunks = chunk(
+                (nineDigits).toLocaleString('fullwide', {useGrouping:false}),
+                3
+            );
+
+            return new Vector3(vectorChunks[0], vectorChunks[1], vectorChunks[2]);
+        })
+
+        let lastVector = vectors.at(-1).toArray();
+        lastVector[2] = 0;
+        let finalVector = new Vector3(lastVector[0], lastVector[1], lastVector[2]);
+        vectors.push(finalVector); // ball falls to the ground at the end
+
+        let minVector = new Vector3(0, 0, 0);
+        let maxVector = new Vector3(999, 999, 999);
+        let maxDistance = minVector.distanceToSquared(maxVector);
+
+        let pathOfBall = [];
+        for (let i = 0; i < vectors.length - 1; i++) {
+            // Create lines between each bounce
+            let currentVector = vectors[i];
+            let nextVector = vectors[i + 1];
+            let distance = currentVector.distanceToSquared(nextVector);
+            pathOfBall.push({
+                line: new Line3(currentVector, nextVector),
+                distance: distance,
+                qtyPicks: distance > 0 ? parseInt((distance/maxDistance) * 999) : 0,
+            });
+        }
+
+        let chosenTickets = [];
+        for (let i = 0; i < pathOfBall.length; i++) {
+            let currentLine = pathOfBall[i];
+            
+            for (let i = 1; i <= currentLine.qtyPicks; i++) {
+                let resultPlaceholder = new Vector3(0, 0, 0);
+                let calculated = currentLine.line.at(0.001 * i, resultPlaceholder)
+                let computed = calculated.toArray().filter(x => x > 0);
+                let ticketValue = 0;
+                if (computed.length == 1) {
+                    ticketValue = computed[0];
+                } else if (computed.length == 2) {
+                    ticketValue = computed[0] * computed[1];
+                } else if (computed.length == 3) {
+                    ticketValue = computed[0] * computed[1] * computed[2];
+                }
+
+                chosenTickets.push(
+                    parseInt(ticketValue)
+                );
+            }
+        }
+
+        console.log(`The ball bounced ${pathOfBall.length - 1} times, resulting in ${chosenTickets.length} chosen tickets.`)
+        generatedNumbers = [...generatedNumbers, ...chosenTickets];
     }
 
     if (response.distributions.includes('fish')) {
@@ -664,7 +782,7 @@ let promptAirdrop = async function () {
     let parsedJSON = JSON.parse(leaderboardJSON);
     let lastTicketVal = parsedJSON.at(-1).range.to;
     
-    let fixedGeneratedNumbers = generatedNumbers.map(num => {
+    let fixedGeneratedNumbers = [...new Set(generatedNumbers)].map(num => {
         if (num <= lastTicketVal) {
             return num;
         }
@@ -691,7 +809,7 @@ let promptAirdrop = async function () {
         let currentPercent = (value.length / fixedGeneratedNumbers.length * 100).toFixed(5);
         summary.push({
             id: key,
-            tickets: JSON.stringify(value),
+            tickets: JSON.stringify(value.sort((a,b) => a-b)),
             qty: value.length,
             percent: currentPercent,
             reward: ((currentPercent/100) * response.reward ?? 0).toFixed(5)
