@@ -36,6 +36,35 @@ function chunk(arr, chunkSize) {
 }
 
 /**
+ * Extract ticket numbers from multiple points along a line
+ * @param {Number} quantity 
+ * @param {Line3} targetLine 
+ * @param {Number} increment 
+ * @returns {Array}
+ */
+function extractTickets(quantity, targetLine, increment) {
+    let chosentickets = [];
+    for (let i = 1; i <= quantity; i++) {
+        let resultPlaceholder = new Vector3(0, 0, 0);
+        let calculated = targetLine.at(increment * i, resultPlaceholder)
+        let computed = calculated.toArray().filter(x => x > 0);
+        let ticketValue = 0;
+        if (computed.length == 1) {
+            ticketValue = computed[0];
+        } else if (computed.length == 2) {
+            ticketValue = computed[0] * computed[1];
+        } else if (computed.length == 3) {
+            ticketValue = computed[0] * computed[1] * computed[2];
+        }
+
+        chosenTickets.push(
+            parseInt(ticketValue)
+        );
+    }
+    return chosentickets;
+}
+
+/**
  * For identifying non-numeric chars in witness signature
  * @param {String} c 
  * @returns {Boolean}
@@ -563,26 +592,10 @@ let promptAirdrop = async function () {
 
         let chosenTickets = [];
         for (let i = 0; i < avg_lines.length; i++) {
-            let current = avg_lines[i];
-            let qty = parseInt((current.distanceSq()/maxDistance) * 999);
-
-            for (let i = 1; i <= qty; i++) {
-                let resultPlaceholder = new Vector3(0, 0, 0);
-                let calculated = current.at(0.001 * i, resultPlaceholder)
-                let computed = calculated.toArray().filter(x => x > 0);
-                let ticketValue = 0;
-                if (computed.length == 1) {
-                    ticketValue = computed[0];
-                } else if (computed.length == 2) {
-                    ticketValue = computed[0] * computed[1];
-                } else if (computed.length == 3) {
-                    ticketValue = computed[0] * computed[1] * computed[2];
-                }
-
-                chosenTickets.push(
-                    parseInt(ticketValue)
-                );
-            }
+            let currentLine = avg_lines[i];
+            let qty = parseInt((currentLine.distanceSq()/maxDistance) * 999);
+            let currentChosenTickets = extractTickets(qty, currentLine, 0.001);
+            chosenTickets = [...chosenTickets, ...currentChosenTickets];
         }
 
         console.log(`avg_point_lines: ${chosenTickets.length} tickets chosen`)
@@ -610,23 +623,8 @@ let promptAirdrop = async function () {
             let coolingZone = new Vector3(hullFragments[0], hullFragments[1], 999);
             let corrasion = new Line3(splatterPoint, coolingZone);
 
-            for (let i = 1; i <= 999; i++) {
-                let resultPlaceholder = new Vector3(0, 0, 0);
-                let calculated = corrasion.at(0.001 * i, resultPlaceholder)
-                let computed = calculated.toArray().filter(x => x > 0);
-                let ticketValue = 0;
-                if (computed.length == 1) {
-                    ticketValue = computed[0];
-                } else if (computed.length == 2) {
-                    ticketValue = computed[0] * computed[1];
-                } else if (computed.length == 3) {
-                    ticketValue = computed[0] * computed[1] * computed[2];
-                }
-
-                corrasionTickets.push(
-                    parseInt(ticketValue)
-                );
-            }
+            let currentChosenTickets = extractTickets(999, corrasion, 0.001);
+            corrasionTickets = [...corrasionTickets, ...currentChosenTickets];
         }
 
         console.log(`The alien bled on ${initHullChunks.length} hull tiles, resulting in ${corrasionTickets.length} melted tickets.`)
@@ -671,24 +669,8 @@ let promptAirdrop = async function () {
         let chosenTickets = [];
         for (let i = 0; i < pathOfBall.length; i++) {
             let currentLine = pathOfBall[i];
-            
-            for (let i = 1; i <= currentLine.qtyPicks; i++) {
-                let resultPlaceholder = new Vector3(0, 0, 0);
-                let calculated = currentLine.line.at(0.001 * i, resultPlaceholder)
-                let computed = calculated.toArray().filter(x => x > 0);
-                let ticketValue = 0;
-                if (computed.length == 1) {
-                    ticketValue = computed[0];
-                } else if (computed.length == 2) {
-                    ticketValue = computed[0] * computed[1];
-                } else if (computed.length == 3) {
-                    ticketValue = computed[0] * computed[1] * computed[2];
-                }
-
-                chosenTickets.push(
-                    parseInt(ticketValue)
-                );
-            }
+            let currentChosenTickets = extractTickets(currentLine.qtyPicks, currentLine, 0.001);
+            chosenTickets = [...chosenTickets, ...currentChosenTickets];
         }
 
         console.log(`The ball bounced ${pathOfBall.length - 1} times, resulting in ${chosenTickets.length} chosen tickets.`)
@@ -782,23 +764,8 @@ let promptAirdrop = async function () {
 
             let fishInWay = parseInt((path.distanceSq() / maxDistance) * projectileDepth);
 
-            for (let i = 1; i <= fishInWay; i++) {
-                let resultPlaceholder = new Vector3(0, 0, 0);
-                let calculated = path.at(0.001 * i, resultPlaceholder)
-                let computed = calculated.toArray().filter(x => x > 0);
-                let ticketValue = 0;
-                if (computed.length == 1) {
-                    ticketValue = computed[0];
-                } else if (computed.length == 2) {
-                    ticketValue = computed[0] * computed[1];
-                } else if (computed.length == 3) {
-                    ticketValue = computed[0] * computed[1] * computed[2];
-                }
-
-                obliteratedFish.push(
-                    parseInt(ticketValue)
-                );
-            }
+            let currentChosenTickets = extractTickets(fishInWay, path, 0.001);
+            obliteratedFish = [...obliteratedFish, ...currentChosenTickets];
         }
 
         console.log(`1 entry point, ${endVectors.length} shards, ${obliteratedFish.length} fish obliterated 🐟🎣🍴`)
