@@ -23,6 +23,7 @@
   "homepage": "https://github.com/BTS-CM/ticketTracker#readme",
   "dependencies": {
     "bitsharesjs-ws": "^6.0.0",
+    "blakejs": "^1.2.1",
     "prompts": "^2.4.2",
     "simple-websocket": "^9.1.0",
     "three": "^0.145.0"

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import prompts from 'prompts';
 import { Vector3, Line3 } from 'three';
+import blake from 'blakejs';
 
 import {
     fetchObjects,
@@ -26,12 +27,25 @@ function chunk(arr, chunkSize) {
     if (chunkSize <= 0) {
         throw "Invalid chunk size"
     }
-    var R = [];
-    for (var i=0,len=arr.length; i<len; i+=chunkSize) {
-        R.push(arr.slice(i,i+chunkSize));
+
+    let refArr = (arr).toLocaleString('fullwide', {useGrouping:false});
+
+    var producedChunk = [];
+    for (let i = 0; i < refArr.length; i += chunkSize) {
+        producedChunk.push(refArr.slice(i, i + chunkSize));
     }
 
-    return R;
+    return producedChunk;
+}
+
+/**
+ * Util for generating ranges of numbers
+ * @param {Number} start 
+ * @param {Number} end 
+ * @returns 
+ */
+function range(start, end) {
+    return Array.from({ length: end - start + 1 }, (_, i) => i)
 }
 
 /**
@@ -427,14 +441,24 @@ let promptAirdrop = async function () {
                         { title: 'Bouncing ball', value: 'bouncing_ball' },
                         { title: 'Alien blood', value: 'alien_blood' },
                         { title: 'Average point lines', value: 'avg_point_lines' },
-                        { title: 'Depth charges', value: 'depth_charges' },
-                        { title: 'Spikes', value: 'spikes'}
+                        //{ title: 'Depth charges', value: 'depth_charges' },
+                        { title: 'cones', value: 'cones'}
                     ],
                 },
                 {
                     type: 'number',
                     name: 'block_number',
                     message: `Enter the block number you wish to use for airdrop purposes.`
+                },
+                {
+                    type: 'select',
+                    name: 'hash',
+                    message: 'What to base RNG on?',
+                    choices: [
+                        { title: 'Plain witness signature string', value: 'plain' },
+                        { title: 'Blake2B (512 bit) hash of witness signature', value: 'Blake2B' },
+                        { title: 'Blake2S (256 bit) hash of witness signature', value: 'Blake2S' }
+                    ],
                 },
                 {
                     type: 'number',
@@ -449,7 +473,7 @@ let promptAirdrop = async function () {
         console.log(error);
     }
     
-    if (!response || !response.distributions || !response.distributions.length || !response.block_number || !response.reward) {
+    if (!response || !response.distributions || !response.distributions.length || !response.block_number || !response.reward || !response.hash) {
         console.log('User quit the random airdrop menu');
         process.exit();
     }
@@ -474,6 +498,12 @@ let promptAirdrop = async function () {
         process.exit();
     }
 
+    if (response.hash === 'Blake2B') { // 512 bit
+        witness_signature = blake.blake2bHex(witness_signature);
+    } else if (response.hash === 'Blake2S') { // 256 bit
+        witness_signature = blake.blake2sHex(witness_signature);
+    }
+
     let filtered_signature = witness_signature.split('').map((char) => {
         if (isCharNumber(char)) {
             return char; // fine
@@ -482,12 +512,7 @@ let promptAirdrop = async function () {
         }
     }).join('')
     
-    let initialChunks = chunk(
-        // 0 - 999,999,
-        // 24 chunks
-        (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-        9
-    ).map(x => parseInt(x));
+    let initialChunks = chunk(filtered_signature, 9).map(x => parseInt(x));
 
     let generatedNumbers = [];
     let minVector = new Vector3(0, 0, 0);
@@ -546,23 +571,111 @@ let promptAirdrop = async function () {
     if (response.distributions.includes('cubed')) {
         // 0 - 997,002,999
         // 72 draws
-        let smallerChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            3
-        ).map(x => parseInt(x));
-
+        let smallerChunks = chunk(filtered_signature, 3).map(x => parseInt(x));
         let cubedChunks = smallerChunks.map(x => parseInt(x * x * x));
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
     }
 
-    // depth_charges
     if (response.distributions.includes('depth_charges')) {
+        // create spheres -> get points within sphere
 
     }
 
-    // spikes
-    if (response.distributions.includes('spikes')) {
+    if (response.distributions.includes('cones')) {
+        // WIP: Doesn't work properly yet
+        // 0 - 997,002,999 (extend via z axis)
+        // Picks random spots from the bottom -> create cones => get points within cones
+        let initBaseChunks = chunk(filtered_signature, 12)
+                             .map(x => parseInt(x))
+                             .filter(x => x.toString().length === 12);
 
+        let tempA = new Vector3(0, 0, 999);
+        let tempB = new Vector3(0, 0, 0);
+        let maxSpine = new Line3(tempA, tempB);
+        let maxSpineLength = maxSpine.distanceSq();
+        let minVector = new Vector3(0, 0, 0);
+
+        let coneTickets = [];
+        for (let i = 0; i < initBaseChunks.length; i++) {
+            let currentChunk = initBaseChunks[i];
+            let currentCone = chunk(currentChunk, 3);
+
+            let centralBasePoint = new Vector3(currentCone[0], currentCone[1], 999);
+            let coneTipPoint = new Vector3(currentCone[0], currentCone[1], currentCone[2]);
+            let coneSpine = new Line3(centralBasePoint, coneTipPoint);
+            let spineLength = coneSpine.distanceSq();
+            let coneSteps = parseInt((spineLength / maxSpineLength) * 999);
+
+            let radius = Math.sqrt(currentCone[3]);
+            if (radius === 0) {
+                let coneSpineTickets = extractTickets(coneSteps, coneSpine, 0.001);
+                coneTickets = [...coneTickets, ...coneSpineTickets];
+            } else {
+                let chosenConeTickets = [];
+
+                for (let y = 0; y < coneSteps; y++) {
+                    let currentRadius = ((parseInt(coneSteps) - parseInt(y)) / parseInt(coneSteps)) * radius;
+                    let maxVector = new Vector3(parseInt(radius), parseInt(radius), 0);
+                    let edgeToCenter = new Line3(minVector, maxVector);
+                    let radiusDistance = edgeToCenter.distanceSq(); 
+
+                    let minX = parseInt(currentCone[0]) - parseInt(currentRadius)
+                    let maxX = parseInt(currentCone[0]) + parseInt(currentRadius)
+                    let minY = parseInt(currentCone[1]) - parseInt(currentRadius)
+                    let maxY = parseInt(currentCone[1]) + parseInt(currentRadius)
+
+                    let xRange = range(minX, maxX);
+                    let yRange = range(minY, maxY);
+
+                    let points = xRange.map(xr => {
+                        return yRange.map(yr => {
+                            let xyVector = new Vector3(xr, yr, 999 - y);
+                            return xyVector.toArray();
+                        }); 
+                    })
+
+                    let flattenedPoints = [].concat.apply([], points);
+
+                    // Filter out corners outwith range of cone
+                    let filteredTickets = [];
+                    for (let g = 0; g < flattenedPoints.length; g++) {
+                        let inflatedVector = new Vector3(
+                            parseInt(flattenedPoints[g][0]),
+                            parseInt(flattenedPoints[g][1]),
+                            parseInt(flattenedPoints[g][2])
+                        )
+
+                        let layerCenter = new Vector3(
+                            parseInt(currentCone[0]),
+                            parseInt(currentCone[1]),
+                            parseInt(flattenedPoints[g][2])
+                        )
+
+                        let lineToCenter = new Line3(inflatedVector, layerCenter);
+
+                        
+                        console.log({
+                            inflatedVector: inflatedVector.toArray(),
+                            layerCenter: layerCenter.toArray(),
+                            ltc: lineToCenter.distanceSq(),
+                            rad: radiusDistance
+                        })
+                        
+
+                        if (lineToCenter.distanceSq <= radiusDistance) {
+                            filteredTickets.push(flattenedPoints[g]);
+                        }
+                    }
+
+                    chosenConeTickets = [...chosenConeTickets, ...filteredTickets];
+                }
+
+                coneTickets = [...coneTickets, ...chosenConeTickets];
+            }
+        }
+
+        console.log(`${initBaseChunks.length} cones were created, resulting in ${coneTickets.length} chosen tickets`);
+        generatedNumbers = [...generatedNumbers, ...coneTickets];
     }
 
     if (response.distributions.includes('avg_point_lines')) {
