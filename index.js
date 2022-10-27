@@ -1,6 +1,5 @@
 import fs from 'fs';
 import prompts from 'prompts';
-//import * as THREE from 'three';
 import { Vector3, Line3 } from 'three';
 
 import {
@@ -423,11 +422,13 @@ let promptAirdrop = async function () {
                         { title: 'PI', value: 'pi' },
                         { title: 'Reverse PI', value: 'reverse_pi' },
                         { title: 'Cubed', value: 'cubed' },
-                        { title: 'Hyper-Cubed', value: 'hypercube'},
-                        { title: 'Fish in a barrel', value: 'fish'},
-                        { title: 'Bouncing ball', value: 'bouncing_ball'},
-                        { title: 'Alien blood', value: 'alien_blood'},
-                        { title: 'Average point lines', value: 'avg_point_lines'}
+                        { title: 'Hyper-Cubed', value: 'hypercube' },
+                        { title: 'Fish in a barrel', value: 'fish' },
+                        { title: 'Bouncing ball', value: 'bouncing_ball' },
+                        { title: 'Alien blood', value: 'alien_blood' },
+                        { title: 'Average point lines', value: 'avg_point_lines' },
+                        { title: 'Depth charges', value: 'depth_charges' },
+                        { title: 'Spikes', value: 'spikes'}
                     ],
                 },
                 {
@@ -554,6 +555,16 @@ let promptAirdrop = async function () {
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
     }
 
+    // depth_charges
+    if (response.distributions.includes('depth_charges')) {
+
+    }
+
+    // spikes
+    if (response.distributions.includes('spikes')) {
+
+    }
+
     if (response.distributions.includes('avg_point_lines')) {
         // 0 - 997,002,999 (extend via z axis)
         // Calculate the avg x/y/z coordinates -> draw lines to this from each vector => reward those on line
@@ -645,19 +656,44 @@ let promptAirdrop = async function () {
                 3
             );
 
-            return new Vector3(vectorChunks[0], vectorChunks[1], vectorChunks[2]);
+            return new Vector3(parseInt(vectorChunks[0]), parseInt(vectorChunks[1]), parseInt(vectorChunks[2]));
         })
 
-        let lastVector = vectors.at(-1).toArray();
+        let bouncingVectors = [];
+        for (let i = 0; i < vectors.length; i++) {
+            let currentVector = vectors[i];
+            let cvArray = currentVector.toArray();
+
+            let nextVector = vectors[i + 1];
+            if (!nextVector) {
+                continue;
+            }
+
+            let nvArray = nextVector.toArray();
+            if (nvArray[2] <= cvArray[2]) {
+                // going down
+                let xAxis = (parseInt(nvArray[0]) + parseInt(cvArray[0]))/2;
+                let yAxis = (parseInt(nvArray[1]) + parseInt(cvArray[1]))/2;
+                
+                bouncingVectors.push(
+                    new Vector3(xAxis, yAxis, 0)
+                );
+            }
+            
+            bouncingVectors.push(nextVector);
+        }
+
+        let lastVector = bouncingVectors.slice(-1)[0].toArray();
         lastVector[2] = 0;
         let finalVector = new Vector3(lastVector[0], lastVector[1], lastVector[2]);
-        vectors.push(finalVector); // ball falls to the ground at the end
+        bouncingVectors.push(finalVector); // ball falls to the ground at the end
 
         let pathOfBall = [];
-        for (let i = 0; i < vectors.length - 1; i++) {
+        for (let i = 0; i < bouncingVectors.length - 1; i++) {
             // Create lines between each bounce
-            let currentVector = vectors[i];
-            let nextVector = vectors[i + 1];
+            let currentVector = bouncingVectors[i];
+            let nextVector = bouncingVectors[i + 1];
+
             let distance = currentVector.distanceToSquared(nextVector);
             pathOfBall.push({
                 line: new Line3(currentVector, nextVector),
@@ -669,7 +705,7 @@ let promptAirdrop = async function () {
         let chosenTickets = [];
         for (let i = 0; i < pathOfBall.length; i++) {
             let currentLine = pathOfBall[i];
-            let currentChosenTickets = extractTickets(currentLine.qtyPicks, currentLine, 0.001);
+            let currentChosenTickets = extractTickets(currentLine.qtyPicks, currentLine.line, 0.001);
             chosenTickets = [...chosenTickets, ...currentChosenTickets];
         }
 
