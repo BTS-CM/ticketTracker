@@ -44,8 +44,26 @@ function chunk(arr, chunkSize) {
  * @param {Number} end 
  * @returns 
  */
-function range(start, end) {
-    return Array.from({ length: end - start + 1 }, (_, i) => i)
+function range (start, end) {
+    return new Array(end - start).fill().map((d, i) => i + start);
+}
+
+/**
+ * Calculating the ticket value from a vector
+ * @param {Vector3} inputVector 
+ */
+function vectorValue (inputVector) {
+    let computed = inputVector.toArray().filter(x => x > 0);
+    let ticketValue = 0;
+    if (computed.length == 1) {
+        ticketValue = computed[0];
+    } else if (computed.length == 2) {
+        ticketValue = computed[0] * computed[1];
+    } else if (computed.length == 3) {
+        ticketValue = computed[0] * computed[1] * computed[2];
+    }
+
+    return parseInt(ticketValue);
 }
 
 /**
@@ -441,8 +459,8 @@ let promptAirdrop = async function () {
                         { title: 'Bouncing ball', value: 'bouncing_ball' },
                         { title: 'Alien blood', value: 'alien_blood' },
                         { title: 'Average point lines', value: 'avg_point_lines' },
-                        //{ title: 'Depth charges', value: 'depth_charges' },
-                        { title: 'cones', value: 'cones'}
+                        { title: 'Depth charges', value: 'depth_charges' },
+                        { title: 'Tubes', value: 'tubes'}
                     ],
                 },
                 {
@@ -465,7 +483,16 @@ let promptAirdrop = async function () {
                     name: 'reward',
                     message: `Enter a quantity of ${chain === "BTS" ? "BTS" : "TEST"} to distribute.`,
                     validate: value => value < 0 || value > (2994550000)  ? `Invalid quantity: ${value < 0 ? 'Too low' : 'Too high'}` : true
-                }
+                },
+                {
+                    type: 'select',
+                    name: 'winners',
+                    message: 'Should drawn tickets always have winners?',
+                    choices: [
+                        { title: 'Yes, remove unallocated tickets from draw.', value: 'y_remove' },
+                        { title: 'No, only allocate tickets if rightfully won.', value: 'no' }
+                    ],
+                },
             ],
             { onCancel }
         );
@@ -578,104 +605,97 @@ let promptAirdrop = async function () {
 
     if (response.distributions.includes('depth_charges')) {
         // create spheres -> get points within sphere
-
+        let initBaseChunks = chunk(filtered_signature, 9)
+                             .map(x => parseInt(x))
+                             .filter(x => x.toString().length === 9);
+                             
     }
 
-    if (response.distributions.includes('cones')) {
+    if (response.distributions.includes('tubes')) {
         // WIP: Doesn't work properly yet
         // 0 - 997,002,999 (extend via z axis)
-        // Picks random spots from the bottom -> create cones => get points within cones
-        let initBaseChunks = chunk(filtered_signature, 12)
+        // Picks random spots from the bottom -> create tubes => get points within tubes
+        let initBaseChunks = chunk(filtered_signature, 9)
                              .map(x => parseInt(x))
-                             .filter(x => x.toString().length === 12);
+                             .filter(x => x.toString().length === 9);
 
         let tempA = new Vector3(0, 0, 999);
         let tempB = new Vector3(0, 0, 0);
         let maxSpine = new Line3(tempA, tempB);
         let maxSpineLength = maxSpine.distanceSq();
-        let minVector = new Vector3(0, 0, 0);
 
-        let coneTickets = [];
+        let tubeTickets = [];
         for (let i = 0; i < initBaseChunks.length; i++) {
             let currentChunk = initBaseChunks[i];
-            let currentCone = chunk(currentChunk, 3);
+            let currentTube = chunk(currentChunk, 3);
 
-            let centralBasePoint = new Vector3(currentCone[0], currentCone[1], 999);
-            let coneTipPoint = new Vector3(currentCone[0], currentCone[1], currentCone[2]);
-            let coneSpine = new Line3(centralBasePoint, coneTipPoint);
-            let spineLength = coneSpine.distanceSq();
-            let coneSteps = parseInt((spineLength / maxSpineLength) * 999);
+            let tubeTipPoint = new Vector3(currentTube[0], currentTube[1], currentTube[2]);
+            let centralBasePoint = new Vector3(currentTube[0], currentTube[1], 999);
 
-            let radius = Math.sqrt(currentCone[3]);
-            if (radius === 0) {
-                let coneSpineTickets = extractTickets(coneSteps, coneSpine, 0.001);
-                coneTickets = [...coneTickets, ...coneSpineTickets];
-            } else {
-                let chosenConeTickets = [];
+            let tubeSpine = new Line3(centralBasePoint, tubeTipPoint);
+            let spineLength = tubeSpine.distanceSq();
+            
+            let tubeSteps = parseInt((spineLength / maxSpineLength) * 999);
 
-                for (let y = 0; y < coneSteps; y++) {
-                    let currentRadius = ((parseInt(coneSteps) - parseInt(y)) / parseInt(coneSteps)) * radius;
-                    let maxVector = new Vector3(parseInt(radius), parseInt(radius), 0);
-                    let edgeToCenter = new Line3(minVector, maxVector);
-                    let radiusDistance = edgeToCenter.distanceSq(); 
+            let currentRadius = 1;
+            let chosenTubeTickets = [];
+            for (let y = 0; y < tubeSteps; y++) {
+                let minX = parseInt(currentTube[0]) - parseInt(currentRadius)
+                let maxX = parseInt(currentTube[0]) + parseInt(currentRadius)
+                let minY = parseInt(currentTube[1]) - parseInt(currentRadius)
+                let maxY = parseInt(currentTube[1]) + parseInt(currentRadius)
 
-                    let minX = parseInt(currentCone[0]) - parseInt(currentRadius)
-                    let maxX = parseInt(currentCone[0]) + parseInt(currentRadius)
-                    let minY = parseInt(currentCone[1]) - parseInt(currentRadius)
-                    let maxY = parseInt(currentCone[1]) + parseInt(currentRadius)
+                let minVector = new Vector3(minX, minY, 999 - y);
+                let maxVector = new Vector3(maxX, maxY, 999 - y);
+                
+                let edgeToCenter = new Line3(minVector, maxVector);
+                let radiusDistance = edgeToCenter.distanceSq(); 
 
-                    let xRange = range(minX, maxX);
-                    let yRange = range(minY, maxY);
+                let xRange = range(minX, maxX);
+                let yRange = range(minY, maxY);
 
-                    let points = xRange.map(xr => {
-                        return yRange.map(yr => {
-                            let xyVector = new Vector3(xr, yr, 999 - y);
-                            return xyVector.toArray();
-                        }); 
-                    })
+                let points = xRange.map(xr => {
+                    return yRange.map(yr => {
+                        let xyVector = new Vector3(xr, yr, 999 - y);
+                        return xyVector.toArray();
+                    });
+                })
 
-                    let flattenedPoints = [].concat.apply([], points);
+                let flattenedPoints = [].concat.apply([], points);
 
-                    // Filter out corners outwith range of cone
-                    let filteredTickets = [];
-                    for (let g = 0; g < flattenedPoints.length; g++) {
-                        let inflatedVector = new Vector3(
-                            parseInt(flattenedPoints[g][0]),
-                            parseInt(flattenedPoints[g][1]),
-                            parseInt(flattenedPoints[g][2])
-                        )
+                // Filter out corners outwith range of tube
+                let filteredTickets = [];
+                for (let g = 0; g < flattenedPoints.length; g++) {
+                    let inflatedVector = new Vector3(
+                        parseInt(flattenedPoints[g][0]),
+                        parseInt(flattenedPoints[g][1]),
+                        parseInt(flattenedPoints[g][2])
+                    )
 
-                        let layerCenter = new Vector3(
-                            parseInt(currentCone[0]),
-                            parseInt(currentCone[1]),
-                            parseInt(flattenedPoints[g][2])
-                        )
+                    let layerCenter = new Vector3(
+                        parseInt(currentTube[0]),
+                        parseInt(currentTube[1]),
+                        parseInt(flattenedPoints[g][2])
+                    )
 
-                        let lineToCenter = new Line3(inflatedVector, layerCenter);
+                    let lineToCenter = new Line3(inflatedVector, layerCenter);
 
-                        
-                        console.log({
-                            inflatedVector: inflatedVector.toArray(),
-                            layerCenter: layerCenter.toArray(),
-                            ltc: lineToCenter.distanceSq(),
-                            rad: radiusDistance
-                        })
-                        
-
-                        if (lineToCenter.distanceSq <= radiusDistance) {
-                            filteredTickets.push(flattenedPoints[g]);
-                        }
+                    if (lineToCenter.distanceSq() <= radiusDistance) {
+                        let pointValue = vectorValue(inflatedVector);
+                        filteredTickets.push(pointValue);
                     }
-
-                    chosenConeTickets = [...chosenConeTickets, ...filteredTickets];
                 }
 
-                coneTickets = [...coneTickets, ...chosenConeTickets];
+                if (filteredTickets.length) {
+                    chosenTubeTickets = [...chosenTubeTickets, ...filteredTickets];
+                }
             }
+
+            tubeTickets = [...tubeTickets, ...chosenTubeTickets];
         }
 
-        console.log(`${initBaseChunks.length} cones were created, resulting in ${coneTickets.length} chosen tickets`);
-        generatedNumbers = [...generatedNumbers, ...coneTickets];
+        console.log(`${initBaseChunks.length} tubes were created, resulting in ${tubeTickets.length} chosen tickets`);
+        generatedNumbers = [...generatedNumbers, ...tubeTickets];
     }
 
     if (response.distributions.includes('avg_point_lines')) {
@@ -951,20 +971,25 @@ let promptAirdrop = async function () {
 
     let parsedJSON = JSON.parse(leaderboardJSON);
     let lastTicketVal = parsedJSON.at(-1).range.to;
+
+    let finalGeneratedNumbers = [];
+    if (response.winners === 'y_remove') {
+        finalGeneratedNumbers = [...new Set(generatedNumbers)].map(num => {
+            if (num <= lastTicketVal) {
+                return num;
+            }
     
-    let fixedGeneratedNumbers = [...new Set(generatedNumbers)].map(num => {
-        if (num <= lastTicketVal) {
-            return num;
-        }
-
-        let adjustedNum = num - (Math.floor(num / lastTicketVal) * lastTicketVal);
-
-        return adjustedNum;
-    })
+            let adjustedNum = num - (Math.floor(num / lastTicketVal) * lastTicketVal);
+    
+            return adjustedNum;
+        })
+    } else if (response.winners === 'no') {
+        finalGeneratedNumbers = [...new Set(generatedNumbers)]; // remove duplicates
+    }
 
     let winners = {};
-    for (let i = 0; i < fixedGeneratedNumbers.length; i++) {
-        let currentNumber = fixedGeneratedNumbers[i];
+    for (let i = 0; i < finalGeneratedNumbers.length; i++) {
+        let currentNumber = finalGeneratedNumbers[i];
         let search = parsedJSON.find(x => currentNumber >= x.range.from && currentNumber <= x.range.to);
 
         if (search) {
@@ -976,7 +1001,7 @@ let promptAirdrop = async function () {
 
     let summary = [];
     for (const [key, value] of Object.entries(winners)) {
-        let currentPercent = (value.length / fixedGeneratedNumbers.length * 100).toFixed(5);
+        let currentPercent = (value.length / finalGeneratedNumbers.length * 100).toFixed(5);
         summary.push({
             id: key,
             tickets: JSON.stringify(value.sort((a,b) => a-b)),
