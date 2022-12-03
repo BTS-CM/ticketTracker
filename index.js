@@ -78,15 +78,13 @@ function extractTickets(quantity, targetLine, increment) {
     for (let i = 1; i <= quantity; i++) {
         let resultPlaceholder = new Vector3(0, 0, 0);
         let calculated = targetLine.at(increment * i, resultPlaceholder)
-        let computed = calculated.toArray().filter(x => x > 0);
+        let computed = calculated.toArray();
         let ticketValue = 0;
-        if (computed.length == 1) {
-            ticketValue = computed[0];
-        } else if (computed.length == 2) {
-            ticketValue = computed[0] * computed[1];
-        } else if (computed.length == 3) {
-            ticketValue = computed[0] * computed[1] * computed[2];
-        }
+
+        let x = computed[0];
+        let y = computed[1];
+        let z = computed[2];        
+        ticketValue = (z * 1000000) + ((y * 1000) + x);
 
         chosenTickets.push(
             parseInt(ticketValue)
@@ -459,7 +457,6 @@ let promptAirdrop = async function () {
                         { title: 'Bouncing ball', value: 'bouncing_ball' },
                         { title: 'Alien blood', value: 'alien_blood' },
                         { title: 'Average point lines', value: 'avg_point_lines' },
-                        { title: 'Depth charges', value: 'depth_charges' },
                         { title: 'Tubes', value: 'tubes'}
                     ],
                 },
@@ -601,14 +598,6 @@ let promptAirdrop = async function () {
         let smallerChunks = chunk(filtered_signature, 3).map(x => parseInt(x));
         let cubedChunks = smallerChunks.map(x => parseInt(x * x * x));
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
-    }
-
-    if (response.distributions.includes('depth_charges')) {
-        // create spheres -> get points within sphere
-        let initBaseChunks = chunk(filtered_signature, 9)
-                             .map(x => parseInt(x))
-                             .filter(x => x.toString().length === 9);
-                             
     }
 
     if (response.distributions.includes('tubes')) {
