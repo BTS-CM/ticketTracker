@@ -24,18 +24,38 @@ let finished;
  * @returns {Array}
  */
 function chunk(arr, chunkSize) {
-    if (chunkSize <= 0) {
+    if (chunkSize <= 0 || chunkSize > arr.length) {
         throw "Invalid chunk size"
     }
 
     let refArr = (arr).toLocaleString('fullwide', {useGrouping:false});
 
-    var producedChunk = [];
+    var producedChunks = [];
     for (let i = 0; i < refArr.length; i += chunkSize) {
-        producedChunk.push(refArr.slice(i, i + chunkSize));
+        producedChunks.push(refArr.slice(i, i + chunkSize));
     }
 
-    return producedChunk;
+    return producedChunks.filter(x => x.length === chunkSize);
+}
+
+/**
+ * Filter 0's then parseInt to avoid "010" -> 8 issue
+ * @param {String} parseTarget
+ */
+function filterParseInt(parseTarget) {
+    const vals = parseTarget.split("");
+
+    let finalValue;
+    for (let i = 0; i < vals.length; i++) {
+        if (parseInt(vals[i]) > 0) {
+            finalValue = parseTarget.substring(i, vals.length);
+            break;
+        } else {
+            continue;
+        }
+    }
+
+    return !finalValue ? 0 : parseInt(finalValue); 
 }
 
 /**
@@ -46,24 +66,6 @@ function chunk(arr, chunkSize) {
  */
 function range (start, end) {
     return new Array(end - start).fill().map((d, i) => i + start);
-}
-
-/**
- * Calculating the ticket value from a vector
- * @param {Vector3} inputVector 
- */
-function vectorValue (inputVector) {
-    let computed = inputVector.toArray().filter(x => x > 0);
-    let ticketValue = 0;
-    if (computed.length == 1) {
-        ticketValue = computed[0];
-    } else if (computed.length == 2) {
-        ticketValue = computed[0] * computed[1];
-    } else if (computed.length == 3) {
-        ticketValue = computed[0] * computed[1] * computed[2];
-    }
-
-    return parseInt(ticketValue);
 }
 
 /**
@@ -452,12 +454,10 @@ let promptAirdrop = async function () {
                         { title: 'PI', value: 'pi' },
                         { title: 'Reverse PI', value: 'reverse_pi' },
                         { title: 'Cubed', value: 'cubed' },
-                        { title: 'Hyper-Cubed', value: 'hypercube' },
                         { title: 'Fish in a barrel', value: 'fish' },
                         { title: 'Bouncing ball', value: 'bouncing_ball' },
                         { title: 'Alien blood', value: 'alien_blood' },
-                        { title: 'Average point lines', value: 'avg_point_lines' },
-                        { title: 'Tubes', value: 'tubes'}
+                        { title: 'Average point lines', value: 'avg_point_lines' }
                     ],
                 },
                 {
@@ -536,7 +536,7 @@ let promptAirdrop = async function () {
         }
     }).join('')
     
-    let initialChunks = chunk(filtered_signature, 9).map(x => parseInt(x));
+    let initialChunks = chunk(filtered_signature, 9);
 
     let generatedNumbers = [];
     let minVector = new Vector3(0, 0, 0);
@@ -546,20 +546,20 @@ let promptAirdrop = async function () {
     if (response.distributions.includes('forward')) {
         // 0 - 999,999,999
         // 24 draws
-        generatedNumbers = [...generatedNumbers, ...initialChunks];
+        generatedNumbers = [...generatedNumbers, ...initialChunks.map(x => filterParseInt(x))];
     }
 
     if (response.distributions.includes('reverse')) {
         // 0 - 999,999,999
         // 24 draws
-        let reversedChunks = initialChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
+        let reversedChunks = initialChunks.map(x => filterParseInt(x.split("").reverse().join("")));
         generatedNumbers = [...generatedNumbers, ...reversedChunks];
     }
 
     if (response.distributions.includes('reverse_pi')) {
         // 24 draws
         let piChunks = [];
-        let reversedChunks = initialChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
+        let reversedChunks = initialChunks.map(x => filterParseInt(x.split("").reverse().join("")));
 
         for (let i = 0; i < reversedChunks.length; i++) {
             let current = parseInt(Math.sqrt(reversedChunks[i]));
@@ -579,10 +579,10 @@ let promptAirdrop = async function () {
         // 24 draws
         let piChunks = [];
         for (let i = 0; i < initialChunks.length; i++) {
-            let current = parseInt(Math.sqrt(initialChunks[i]));
+            let current = parseInt(Math.sqrt(filterParseInt(initialChunks[i])));
             
             for (let y = i; y < initialChunks.length - i; y++) {
-                let nextValue = parseInt(Math.sqrt(initialChunks[y]));
+                let nextValue = parseInt(Math.sqrt(filterParseInt(initialChunks[y])));
                 piChunks.push(
                     parseInt((current * nextValue) * Math.PI)
                 )
@@ -595,121 +595,24 @@ let promptAirdrop = async function () {
     if (response.distributions.includes('cubed')) {
         // 0 - 997,002,999
         // 72 draws
-        let smallerChunks = chunk(filtered_signature, 3).map(x => parseInt(x));
+        let smallerChunks = chunk(filtered_signature, 3).map(x => filterParseInt(x));
         let cubedChunks = smallerChunks.map(x => parseInt(x * x * x));
         generatedNumbers = [...generatedNumbers, ...cubedChunks];
-    }
-
-    if (response.distributions.includes('tubes')) {
-        // WIP: Doesn't work properly yet
-        // 0 - 997,002,999 (extend via z axis)
-        // Picks random spots from the bottom -> create tubes => get points within tubes
-        let initBaseChunks = chunk(filtered_signature, 9)
-                             .map(x => parseInt(x))
-                             .filter(x => x.toString().length === 9);
-
-        let tempA = new Vector3(0, 0, 999);
-        let tempB = new Vector3(0, 0, 0);
-        let maxSpine = new Line3(tempA, tempB);
-        let maxSpineLength = maxSpine.distanceSq();
-
-        let tubeTickets = [];
-        for (let i = 0; i < initBaseChunks.length; i++) {
-            let currentChunk = initBaseChunks[i];
-            let currentTube = chunk(currentChunk, 3);
-
-            let tubeTipPoint = new Vector3(currentTube[0], currentTube[1], currentTube[2]);
-            let centralBasePoint = new Vector3(currentTube[0], currentTube[1], 999);
-
-            let tubeSpine = new Line3(centralBasePoint, tubeTipPoint);
-            let spineLength = tubeSpine.distanceSq();
-            
-            let tubeSteps = parseInt((spineLength / maxSpineLength) * 999);
-
-            let currentRadius = 1;
-            let chosenTubeTickets = [];
-            for (let y = 0; y < tubeSteps; y++) {
-                let minX = parseInt(currentTube[0]) - parseInt(currentRadius)
-                let maxX = parseInt(currentTube[0]) + parseInt(currentRadius)
-                let minY = parseInt(currentTube[1]) - parseInt(currentRadius)
-                let maxY = parseInt(currentTube[1]) + parseInt(currentRadius)
-
-                let minVector = new Vector3(minX, minY, 999 - y);
-                let maxVector = new Vector3(maxX, maxY, 999 - y);
-                
-                let edgeToCenter = new Line3(minVector, maxVector);
-                let radiusDistance = edgeToCenter.distanceSq(); 
-
-                let xRange = range(minX, maxX);
-                let yRange = range(minY, maxY);
-
-                let points = xRange.map(xr => {
-                    return yRange.map(yr => {
-                        let xyVector = new Vector3(xr, yr, 999 - y);
-                        return xyVector.toArray();
-                    });
-                })
-
-                let flattenedPoints = [].concat.apply([], points);
-
-                // Filter out corners outwith range of tube
-                let filteredTickets = [];
-                for (let g = 0; g < flattenedPoints.length; g++) {
-                    let inflatedVector = new Vector3(
-                        parseInt(flattenedPoints[g][0]),
-                        parseInt(flattenedPoints[g][1]),
-                        parseInt(flattenedPoints[g][2])
-                    )
-
-                    let layerCenter = new Vector3(
-                        parseInt(currentTube[0]),
-                        parseInt(currentTube[1]),
-                        parseInt(flattenedPoints[g][2])
-                    )
-
-                    let lineToCenter = new Line3(inflatedVector, layerCenter);
-
-                    if (lineToCenter.distanceSq() <= radiusDistance) {
-                        let pointValue = vectorValue(inflatedVector);
-                        filteredTickets.push(pointValue);
-                    }
-                }
-
-                if (filteredTickets.length) {
-                    chosenTubeTickets = [...chosenTubeTickets, ...filteredTickets];
-                }
-            }
-
-            tubeTickets = [...tubeTickets, ...chosenTubeTickets];
-        }
-
-        console.log(`${initBaseChunks.length} tubes were created, resulting in ${tubeTickets.length} chosen tickets`);
-        generatedNumbers = [...generatedNumbers, ...tubeTickets];
     }
 
     if (response.distributions.includes('avg_point_lines')) {
         // 0 - 997,002,999 (extend via z axis)
         // Calculate the avg x/y/z coordinates -> draw lines to this from each vector => reward those on line
-        let initChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            9
-        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
-
-        let vectorChunks = initChunks.map(init => {
-            return chunk(
-                (init).toLocaleString('fullwide', {useGrouping:false}),
-                3
-            )
-        })
+        let vectorChunks = initialChunks.map(initialChunk => chunk(initialChunk, 3));
 
         let xTally = 0;
         let yTally = 0;
         let zTally = 0;
         for (let i = 0; i < vectorChunks.length; i++) {
             let current = vectorChunks[i];
-            xTally += parseInt(current[0]);
-            yTally += parseInt(current[1]);
-            zTally += parseInt(current[2]);
+            xTally += filterParseInt(current[0]);
+            yTally += filterParseInt(current[1]);
+            zTally += filterParseInt(current[2]);
         }
 
         let avgVector = new Vector3(
@@ -719,7 +622,11 @@ let promptAirdrop = async function () {
         )
 
         let avg_lines = vectorChunks.map(vector => {
-            let current = new Vector3(parseInt(vector[0]), parseInt(vector[1]), parseInt(vector[2]));
+            let current = new Vector3(
+                filterParseInt(vector[0]),
+                filterParseInt(vector[1]),
+                filterParseInt(vector[2])
+            );
             return new Line3(current, avgVector);
         })
 
@@ -738,22 +645,18 @@ let promptAirdrop = async function () {
     if (response.distributions.includes('alien_blood')) {
         // 0 - 997,002,999 (extend via z axis)
         // Picks alien blood splatter spots; it burns directly down through the hull
-        let initHullChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            6
-        ).map(x => parseInt(x)).filter(x => x.toString().length === 6);
+        let initHullChunks = chunk(filtered_signature, 6);
 
         let corrasionTickets = [];
         for (let i = 0; i < initHullChunks.length; i++) {
             let currentHullChunk = initHullChunks[i];
 
-            let hullFragments = chunk(
-                (currentHullChunk).toLocaleString('fullwide', {useGrouping:false}),
-                3
-            );
+            let hullFragments = chunk(currentHullChunk, 3);
+            let splatX = filterParseInt(hullFragments[0]);
+            let splatY = filterParseInt(hullFragments[1]);
 
-            let splatterPoint = new Vector3(hullFragments[0], hullFragments[1], 0);
-            let coolingZone = new Vector3(hullFragments[0], hullFragments[1], 999);
+            let splatterPoint = new Vector3(splatX, splatY, 0);
+            let coolingZone = new Vector3(splatX, splatY, 999);
             let corrasion = new Line3(splatterPoint, coolingZone);
 
             let currentChosenTickets = extractTickets(999, corrasion, 0.001);
@@ -767,18 +670,13 @@ let promptAirdrop = async function () {
     if (response.distributions.includes('bouncing_ball')) {
         //  0 - 997,002,999 (extend via z axis)
         //  path of ball bouncing in matrix -> pick tickets along path
-        let initBarrelChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            9
-        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
-
-        let vectors = initBarrelChunks.map(nineDigits => {
-            let vectorChunks = chunk(
-                (nineDigits).toLocaleString('fullwide', {useGrouping:false}),
-                3
+        let vectors = initialChunks.map(nineDigits => {
+            let vectorChunks = chunk(nineDigits, 3);
+            return new Vector3(
+                filterParseInt(vectorChunks[0]),
+                filterParseInt(vectorChunks[1]),
+                filterParseInt(vectorChunks[2])
             );
-
-            return new Vector3(parseInt(vectorChunks[0]), parseInt(vectorChunks[1]), parseInt(vectorChunks[2]));
         })
 
         let bouncingVectors = [];
@@ -890,21 +788,17 @@ let promptAirdrop = async function () {
              process.exit();
          }
 
-        let initBarrelChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            9
-        ).map(x => parseInt(x)).filter(x => x.toString().length === 9);
+        let pointOfImpact = chunk(initialChunks[0], 3);
 
-        let pointOfImpact = chunk(
-            (initBarrelChunks[0]).toLocaleString('fullwide', {useGrouping:false}),
-            3
-        ).map(x => parseInt(x));
-
-        let poiVector = new Vector3(pointOfImpact[0], pointOfImpact[1], pointOfImpact[2]);
+        let poiVector = new Vector3(
+            filterParseInt(pointOfImpact[0]),
+            filterParseInt(pointOfImpact[1]),
+            filterParseInt(pointOfImpact[2])
+        );
 
         let endVectors = response.splinter === 'yes'
-                            ? initBarrelChunks.slice(1)
-                            : [initBarrelChunks.slice(1)[0]];
+                            ? initialChunks.slice(1)
+                            : [initialChunks.slice(1)[0]];
 
         let projectileDepth = response.projectile === 'beam'
                                 ? 999
@@ -912,12 +806,13 @@ let promptAirdrop = async function () {
 
         let obliteratedFish = [];
         for (let y = 0; y < endVectors.length; y++) {
-            let end = chunk(
-                (endVectors[y]).toLocaleString('fullwide', {useGrouping:false}),
-                3
-            ).map(x => parseInt(x));
+            let end = chunk(endVectors[y], 3);
 
-            let endPoint = new Vector3(end[0], end[1], end[2]);
+            let endPoint = new Vector3(
+                filterParseInt(end[0]),
+                filterParseInt(end[1]),
+                filterParseInt(end[2])
+            );
             let path = new Line3(poiVector, endPoint);
 
             let fishInWay = parseInt((path.distanceSq() / maxDistance) * projectileDepth);
@@ -928,26 +823,6 @@ let promptAirdrop = async function () {
 
         console.log(`1 entry point, ${endVectors.length} shards, ${obliteratedFish.length} fish obliterated 🐟🎣🍴`)
         generatedNumbers = [...generatedNumbers, ...obliteratedFish];
-    }
-
-    if (response.distributions.includes('hypercube')) {
-        /**
-         * 0 - 2,991,008,997 (just below the total of 2.994 Billion BTS)
-         * 86 draws
-         */
-        let smallerChunks = chunk(
-            (filtered_signature).toLocaleString('fullwide', {useGrouping:false}),
-            5
-        ).map(x => parseInt(x));
-
-        let reversedChunks = smallerChunks.map(x => parseInt(x.toString().split("").reverse().join("")));
-        
-        let hyperCubeChunks = [...reversedChunks, ...smallerChunks].map(x => {
-            let val = Math.sqrt(x) * Math.PI;
-            return parseInt(3 * (val * val * val));
-        });
-
-        generatedNumbers = [...generatedNumbers, ...hyperCubeChunks];
     }
     
     let leaderboardJSON;
